@@ -1,7 +1,7 @@
 #include <complex>
 #include "fractal_ispc.h"
 
-using namespace std;
+typedef std::complex<double> Complex;
 
 void fractal_cpp(
   ispc::Point* grid, 

@@ -1,6 +1,5 @@
 #include "fractal.h"
 
-typedef std::complex<double> Complex;
 using namespace std;
 
 void fractal_cpp(

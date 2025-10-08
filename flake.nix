@@ -28,7 +28,6 @@
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
               gcc
-              gdb
               ispc
               cmake
               valgrind
@@ -36,8 +35,10 @@
               raylib-sdl
               perf 
               flamegraph
+              gifsicle
             ];
             LD_LIBRARY_PATH ="${pkgs.ispc}/lib";
+            NIX_ENFORCE_NO_NATIVE=0; 
           };
         };
     };

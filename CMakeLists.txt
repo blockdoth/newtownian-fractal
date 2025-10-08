@@ -2,13 +2,13 @@ cmake_minimum_required(VERSION 3.14)
 project(newton-fractal)
 
 set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -funroll-loops -fno-exceptions -fno-rtti -fomit-frame-pointer -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -funroll-loops -fno-exceptions -fno-rtti -fno-omit-frame-pointer -g")
 
 
 set(SOURCES 
   src/main.cpp
   src/fractal.cpp
-  ../include/tasksys.cpp 
+  ../include/tasksys.cpp # Threading runtime implementation for icpc
 )
 
 set(ISPC_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/fractal.ispc)
