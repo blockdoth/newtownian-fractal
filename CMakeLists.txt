@@ -8,6 +8,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -funroll-loops -fno-exceptions
 set(SOURCES 
   src/main.cpp
   src/fractal.cpp
+  ../include/tasksys.cpp 
 )
 
 set(ISPC_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/fractal.ispc)
@@ -28,5 +29,5 @@ add_executable(${PROJECT_NAME} ${SOURCES} ${ISPC_OBJECT})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
-target_link_libraries(${PROJECT_NAME} PUBLIC raylib)
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
+target_link_libraries(${PROJECT_NAME} PUBLIC raylib )

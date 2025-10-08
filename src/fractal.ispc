@@ -58,7 +58,7 @@ inline Complex pow(Complex z, int n) {
  
 
 
-export void fractal_ispc(
+task void fractal_ispc_task(
     uniform Point grid[], 
     uniform int screen_height, 
     uniform int screen_width,     
@@ -67,7 +67,8 @@ export void fractal_ispc(
     uniform int n, 
     uniform int max_iter, 
     uniform double tol, 
-    uniform double zoom
+    uniform double zoom,
+    uniform int core_count
   ){
 
   double plane_width = screen_width / zoom;
@@ -76,33 +77,38 @@ export void fractal_ispc(
   uniform double inv_width = 1.0 / screen_width;
   uniform double inv_height = 1.0 / screen_height;
   uniform double region_divider = 2 * PI / n;
-  varying Complex cf;
+  Complex cf;
   cf.real = 1.0;
   cf.imag = 0.0;
 
-  varying Complex cfprime;
+  Complex cfprime;
   cfprime.real = (double) n;
   cfprime.imag = 0.0;  
   
   
+  uniform int stroke_height = (screen_height + core_count - 1) / core_count;
+
+  int y_start = taskIndex * stroke_height;
+  int y_end = (taskIndex + 1) * stroke_height;
+
   int depth = 0;
   int nearest_root = 0;
-  for (int y = 0; y < screen_height; y++) {
+  for (int y = y_start; y < y_end; y++) {
     foreach (x = 0 ... screen_width) { 
       depth = 0;
       nearest_root = 0;
       
-      varying Complex z;
+      Complex z;
       z.real = ((double)x * inv_width - 0.5) * plane_width + x_pos;
       z.imag = ((double)y * inv_height - 0.5) * plane_height + y_pos;
 
       for (; depth < max_iter; depth++) {
   
-        varying Complex zpow = pow(z, n-1);
-        varying Complex f = subtract(multiply(z, zpow), cf);
-        varying Complex fprime = multiply(cfprime, zpow);
+        Complex zpow = pow(z, n-1);
+        Complex f = subtract(multiply(z, zpow), cf);
+        Complex fprime = multiply(cfprime, zpow);
   
-        varying Complex dz = divide(f, fprime);
+        Complex dz = divide(f, fprime);
   
         if (mag(dz) < tol) {
           break;
@@ -116,5 +122,31 @@ export void fractal_ispc(
       
     }    
   }
+}
+
+export void fractal_ispc(
+  uniform Point grid[], 
+  uniform int screen_height, 
+  uniform int screen_width,     
+  uniform double x_pos, 
+  uniform double y_pos, 
+  uniform int n, 
+  uniform int max_iter, 
+  uniform double tol, 
+  uniform double zoom,
+  uniform core_count
+){
+  launch [core_count] fractal_ispc_task(
+    grid, 
+    screen_height, 
+    screen_width, 
+    x_pos, 
+    y_pos, 
+    n, 
+    max_iter, 
+    tol, 
+    zoom,
+    core_count
+  );
 }
 

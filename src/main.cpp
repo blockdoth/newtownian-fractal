@@ -1,8 +1,9 @@
 #include "raylib.h"
+#include <cmath>
+#include <cstdio>
 #include <vector>
 #include <cstdlib>
 #include <chrono>
-#include <iterator>
 #include "fractal.h"
 
 const int SCREEN_WIDTH = 1024;
@@ -13,6 +14,20 @@ using namespace std;
 using namespace chrono;
 using namespace ispc;
 
+enum Mode {
+  SERIAL,
+  SIMD,
+  SIMD_THREADED
+};
+
+const char* MODE_STRING[] = {
+  "Serial",
+  "SIMD",
+  "SIMD Threaded"
+};
+
+const string asset_path = "../output/";
+
 int main() {
     // Fractal computation
     int n = 3;
@@ -20,20 +35,25 @@ int main() {
     int max_iter_step = 20;
     int max_iter = n * max_iter_step;
     double tolerance = 1e-7;
-    
+    double iter_delta_factor = 0.3;
     // Positioning
     double x_pos = 0.0f;
     double y_pos = 0.0f;
     double zoom = 1.0f;
+    double zoom_factor = 1.3;
+    double base_step_size = 50.0f;
     
     // Color banding
     double k = 20.0f; 
     double min_brightness = 0.2f;
     double log_base = logf(1.0f + k);
 
+    
     bool changed = true;
-    bool use_ispc = false;
+    Mode mode = SERIAL;
+    bool save = false;
      
+    
     vector<Color> pixels(SCREEN_WIDTH * SCREEN_HEIGHT);
 
     int mem_size = SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(Point);
@@ -50,9 +70,10 @@ int main() {
       PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
     });    
 
+    int idx = 0;
 
     while (!WindowShouldClose()) {
-        double step = 100.0f / zoom;
+        double step = base_step_size / zoom;
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))  { 
           x_pos -= step; 
           changed = true; 
@@ -73,23 +94,25 @@ int main() {
           changed = true; 
         }
 
-        if (IsKeyDown(KEY_Q) && zoom > 1.0f)  { 
-          zoom /= 1.5f; 
+        if (IsKeyDown(KEY_LEFT_SHIFT) && zoom > 1.0f)  { 
+          zoom /= zoom_factor; 
+          max_iter -= log(zoom) * iter_delta_factor;
           changed = true; 
         }        
 
-        if (IsKeyDown(KEY_E))  { 
-          zoom *= 1.5f; 
+        if (IsKeyDown(KEY_SPACE))  { 
+          zoom *= zoom_factor; 
+          max_iter += log(zoom) * iter_delta_factor;
           changed = true; 
         } 
 
-        if (IsKeyDown(KEY_EQUAL) && n < max_n)  { 
+        if (IsKeyPressed(KEY_EQUAL) && n < max_n)  { 
           n += 1; 
           max_iter = n * max_iter_step;
           changed = true; 
         }   
 
-        if (IsKeyDown(KEY_MINUS) && n > 0)  { 
+        if (IsKeyPressed(KEY_MINUS) && n > 0)  { 
           n -= 1; 
           max_iter = n * max_iter_step;
           changed = true; 
@@ -105,23 +128,55 @@ int main() {
           changed = true; 
         }         
 
-        if (IsKeyDown(KEY_SPACE) )  { 
-          use_ispc = !use_ispc;
+        if (IsKeyPressed(KEY_ONE) )  { 
+          mode = SERIAL;
           changed = true; 
-        }                                      
+        }    
+        
+        if (IsKeyPressed(KEY_TWO) )  { 
+          mode = SIMD;
+          changed = true; 
+        }                                         
+        
+        if (IsKeyPressed(KEY_THREE) )  { 
+          mode = SIMD_THREADED;
+          changed = true; 
+        }    
+        if (IsKeyPressed(KEY_R) )  { 
+          save = !save; 
+          printf("Saving frames = %d\n", save);
+        }    
+
 
         if (changed) {
             auto compute_before = steady_clock::now();
             
-            if (use_ispc){
-              fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom);
-            }else {
-              fractal_cpp(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom);
+            switch (mode) {
+              case SERIAL:
+                fractal_cpp(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom);
+                break;
+              case SIMD:
+                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, 1);
+                break;
+              case SIMD_THREADED:
+                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, 16);
+                break;
             }
+
             
             auto duration = duration_cast<chrono::duration<double>>(steady_clock::now() - compute_before);
             
-            printf("Frame (%dx%d) recomputed in %f secs at (%.2f, %.2f) using ispc = %d at %.2fx zoom with n=%d and max_iter=%d\n", SCREEN_WIDTH, SCREEN_HEIGHT,  duration.count(), x_pos, y_pos, use_ispc, zoom,n, max_iter);
+            printf("Frame (%dx%d) recomputed in %f secs at (%.2f, %.2f) mode %s at %fx zoom with n=%d and max_iter=%d\n", SCREEN_WIDTH, SCREEN_HEIGHT,  duration.count(), x_pos, y_pos, MODE_STRING[mode], zoom,n, max_iter);
+            
+            if (save){
+              Image image = LoadImageFromTexture(texture); 
+  
+              std::string path = std::format("{}frame_{:03}.png", asset_path, idx);
+              printf("Exporting frame to %s\n", path.c_str());
+              ExportImage(image, path.c_str());
+              
+              idx++;
+            }
         }    
         
         for (int y = 0; y < SCREEN_HEIGHT; y++) {
@@ -134,17 +189,14 @@ int main() {
                 double brightness = logf(1.0f + k * normalized) / log_base;
 
                 double brightness_adjusted = min_brightness + (1.0f - brightness) * brightness;
-                // printf("%d %d\n", grid[idx].depth, grid[idx].nearest_root);
-                pixels[idx] = {
-                    static_cast<unsigned char>(color.r * brightness_adjusted),
-                    static_cast<unsigned char>(color.g * brightness_adjusted),
-                    static_cast<unsigned char>(color.b * brightness_adjusted),
-                    255
-                };
+
+                color.r *= brightness_adjusted; 
+                color.g *= brightness_adjusted; 
+                color.b *= brightness_adjusted; 
+                pixels[idx] = color;
             }
         }
       
-
         UpdateTexture(texture, pixels.data());
         BeginDrawing();
         ClearBackground(BLACK);
