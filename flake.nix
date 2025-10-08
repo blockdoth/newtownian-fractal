@@ -34,6 +34,8 @@
               valgrind
               clang-tools
               raylib-sdl
+              perf 
+              flamegraph
             ];
           };
         };
