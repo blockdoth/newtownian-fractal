@@ -1,149 +1,140 @@
 #include "raylib.h"
-#include <complex>
 #include <vector>
 #include <cstdlib>
-
 #include <chrono>
+#include <iterator>
+#include "fractal.h"
 
+const int SCREEN_WIDTH = 1024;
+const int SCREEN_HEIGHT = 1024;
+const Color roots[] = { RED, GREEN, BLUE, YELLOW, ORANGE, PURPLE, GRAY, PINK, DARKGREEN, DARKBLUE};
 
-struct Point {
-    int depth;
-    int nearest_point;
-};
-
-const int screenWidth = 1000;
-const int screenHeight = 1000;
-
-typedef std::complex<float> Complex;
-
-std::vector<Point> random_grid(){
-  std::vector<Point> grid(screenWidth * screenHeight);
-  for (int y = 0; y < screenHeight; y++) {
-    for (int x = 0; x < screenWidth; x++) {
-        grid[y * screenWidth + x].nearest_point = rand() % 3;
-    }
-  }
-  return grid;
-}
-
-
-
-std::vector<Point> fractal_grid(float start_x, float start_y, int n, int max_iter, float tol, float zoom){
-  std::vector<Point> grid(screenWidth * screenHeight);
-  
-
-  float plane_width = screenWidth / zoom;
-  float plane_height = screenHeight / zoom; 
-  Complex cf = Complex(1,0);
-  Complex cfprime = Complex(n,0);
-  
-  for (int y = 0; y < screenHeight; y++) {
-    for (int x = 0; x < screenWidth; x++) {
-      
-      int depth = 0;
-      int nearest_root = 0;
-
-      float real = (x / (float)screenWidth) * plane_width + start_x;
-      float imag = (y / (float)screenHeight) * plane_height + start_y;
-      Complex z(real, imag);
-      for (; depth < max_iter; depth++) {
-
-        Complex zpow = std::pow(z, n-1);
-        Complex f = z * zpow - cf;
-        Complex fprime = cfprime * zpow;
-
-        Complex dz =  f / fprime;
-
-        if (abs(dz) < tol) {
-          break;
-        }
-        z -= dz;
-      }
-      nearest_root = (int)((std::arg(z) + M_PI) / (2*M_PI/n))  % n; 
-      grid[y * screenWidth + x] = {depth, nearest_root};
-    }
-  }
-  return grid;
-}
+using namespace std;
+using namespace chrono;
+using namespace ispc;
 
 int main() {
-    int n = 5;
-    int max_iter = 50;
-    float tolerance = 1e-3;
+    // Fractal computation
+    int n = 3;
+    int max_n = sizeof(roots) / sizeof(roots[0]);
+    int max_iter_step = 20;
+    int max_iter = n * max_iter_step;
+    double tolerance = 1e-7;
+    
+    // Positioning
+    double x_pos = 0.0f;
+    double y_pos = 0.0f;
+    double zoom = 1.0f;
+    
+    // Color banding
+    double k = 20.0f; 
+    double min_brightness = 0.2f;
+    double log_base = logf(1.0f + k);
 
-    std::vector<Color> pixels(screenWidth * screenHeight);
+    bool changed = true;
+    bool use_ispc = false;
+     
+    vector<Color> pixels(SCREEN_WIDTH * SCREEN_HEIGHT);
 
-    InitWindow(screenWidth, screenHeight, "Newton Fractal");
+    int mem_size = SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(Point);
+    Point* grid = (Point*) std::aligned_alloc(32, mem_size);
+    
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Newton Fractal");
     SetTargetFPS(60);
 
     Texture2D texture = LoadTextureFromImage({
       pixels.data(),
-      screenWidth,
-      screenHeight,
+      SCREEN_WIDTH,
+      SCREEN_HEIGHT,
       1,
       PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
-    });
-    
-    float start_x = -500.0f;
-    float start_y = -500.0f;
-    float zoom = 1.0f;
+    });    
 
-    float k = 20.0f; 
-    float min_brightness = 0.2f;
-    float log_base = logf(1.0f + k);
-
-
-    bool moved = true;
-    std::vector<Point> grid;
-    const Color roots[] = { RED, GREEN, BLUE, YELLOW, ORANGE };
 
     while (!WindowShouldClose()) {
-        if (IsKeyPressed(KEY_A))  { 
-          start_x -= 100.0f; 
-          moved = true; 
-        }
-        if (IsKeyPressed(KEY_D)) { 
-          start_x += 100.0f; 
-          moved = true; 
-        }
-        if (IsKeyPressed(KEY_W))    { 
-          start_y -= 100.0f; 
-          moved = true; 
-        }
-        if (IsKeyPressed(KEY_S))  { 
-          start_y += 100.0f; 
-          moved = true; 
+        double step = 100.0f / zoom;
+        if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))  { 
+          x_pos -= step; 
+          changed = true; 
         }
 
-        if (IsKeyPressed(KEY_Q))  { 
-          zoom *= 1.3f; 
-          moved = true; 
+        if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) { 
+          x_pos += step; 
+          changed = true; 
+        }
+
+        if (IsKeyDown(KEY_W) || IsKeyDown(KEY_UP))    { 
+          y_pos -= step; 
+          changed = true; 
+        }
+
+        if (IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN))  { 
+          y_pos += step; 
+          changed = true; 
+        }
+
+        if (IsKeyDown(KEY_Q) && zoom > 1.0f)  { 
+          zoom /= 1.5f; 
+          changed = true; 
         }        
-        if (IsKeyPressed(KEY_E))  { 
-          zoom /= 1.3f; 
-          moved = true; 
-        }       
 
-        if (moved) {
-            auto compute_before = std::chrono::steady_clock::now();
-            grid = fractal_grid(start_x, start_y, n, max_iter, tolerance,zoom);
-            auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - compute_before);
-            printf("Frame recomputed at (%.2f, %.2f) %.2fx in %.3f s\n", start_x, start_y,zoom, duration.count());
-          
-            moved = false;
+        if (IsKeyDown(KEY_E))  { 
+          zoom *= 1.5f; 
+          changed = true; 
+        } 
+
+        if (IsKeyDown(KEY_EQUAL) && n < max_n)  { 
+          n += 1; 
+          max_iter = n * max_iter_step;
+          changed = true; 
+        }   
+
+        if (IsKeyDown(KEY_MINUS) && n > 0)  { 
+          n -= 1; 
+          max_iter = n * max_iter_step;
+          changed = true; 
+        } 
+
+        if (IsKeyDown(KEY_C))  { 
+          max_iter += 10;
+          changed = true; 
+        }   
+
+        if (IsKeyDown(KEY_Z) && max_iter > 0)  { 
+          max_iter -= 10;
+          changed = true; 
+        }         
+
+        if (IsKeyDown(KEY_SPACE) )  { 
+          use_ispc = !use_ispc;
+          changed = true; 
+        }                                      
+
+        if (changed) {
+            auto compute_before = steady_clock::now();
+            
+            if (use_ispc){
+              fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom);
+            }else {
+              fractal_cpp(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom);
+            }
+            
+            auto duration = duration_cast<chrono::duration<double>>(steady_clock::now() - compute_before);
+            
+            printf("Frame (%dx%d) recomputed in %f secs at (%.2f, %.2f) using ispc = %d at %.2fx zoom with n=%d and max_iter=%d\n", SCREEN_WIDTH, SCREEN_HEIGHT,  duration.count(), x_pos, y_pos, use_ispc, zoom,n, max_iter);
         }    
+        
+        for (int y = 0; y < SCREEN_HEIGHT; y++) {
+            for (int x = 0; x < SCREEN_WIDTH; x++) {
+                int idx = y * SCREEN_WIDTH + x;
+            
+                Color color = roots[grid[idx].nearest_root % n];
+            
+                double normalized = static_cast<double>(grid[idx].depth) / max_iter;                
+                double brightness = logf(1.0f + k * normalized) / log_base;
 
-        for (int y = 0; y < screenHeight; y++) {
-            for (int x = 0; x < screenWidth; x++) {
-                int idx = y * screenWidth + x;
-
-                Color color = roots[grid[idx].nearest_point % n];
-
-                float normalized = static_cast<float>(grid[idx].depth) / max_iter;                
-                float brightness = logf(1.0f + k * normalized) / log_base;
-                
-                float brightness_adjusted = min_brightness + (1.0f - brightness) * brightness;
-
+                double brightness_adjusted = min_brightness + (1.0f - brightness) * brightness;
+                // printf("%d %d\n", grid[idx].depth, grid[idx].nearest_root);
                 pixels[idx] = {
                     static_cast<unsigned char>(color.r * brightness_adjusted),
                     static_cast<unsigned char>(color.g * brightness_adjusted),
@@ -152,15 +143,16 @@ int main() {
                 };
             }
         }
+      
 
-        
         UpdateTexture(texture, pixels.data());
         BeginDrawing();
         ClearBackground(BLACK);
         DrawTexture(texture, 0, 0, WHITE);
         EndDrawing();
+        changed = false;
     }
-
+    std::free(grid);
     UnloadTexture(texture);
     CloseWindow();
 }

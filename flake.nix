@@ -37,6 +37,7 @@
               perf 
               flamegraph
             ];
+            LD_LIBRARY_PATH ="${pkgs.ispc}/lib";
           };
         };
     };
