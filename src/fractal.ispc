@@ -90,7 +90,7 @@ task void fractal_ispc_task(
   uniform int stroke_height = (screen_height + core_count - 1) / core_count;
 
   uniform int y_start = taskIndex * stroke_height;
-  uniform int y_end = min((taskIndex + 1) * stroke_height,screen_height);
+  uniform int y_end = min((uniform int)(taskIndex + 1) * stroke_height,screen_height);
 
   for (int y = y_start; y < y_end; y++) {
     foreach (x = 0 ... screen_width) { 
@@ -137,7 +137,7 @@ export void fractal_ispc(
   uniform int max_iter, 
   uniform double tol, 
   uniform double zoom,
-  uniform task_count
+  uniform int task_count
 ){
   launch [task_count] fractal_ispc_task(
     grid, 

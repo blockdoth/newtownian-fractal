@@ -52,11 +52,13 @@ int main() {
 
     // UI 
     bool changed = true;
-    Mode mode = SERIAL;
+    Mode mode = SIMD_THREADED;
     bool save = false;
      
     // recording
     int frame_idx = 0;
+
+    int threaded_jobs_count = 64;
     
     vector<Color> pixels(SCREEN_WIDTH * SCREEN_HEIGHT);
     Point* grid = (Point*) std::aligned_alloc(32,  SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(Point));
@@ -165,7 +167,7 @@ int main() {
                 fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, 1);
                 break;
               case SIMD_THREADED:
-                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, 64);
+                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, threaded_jobs_count);
                 break;
             }
 

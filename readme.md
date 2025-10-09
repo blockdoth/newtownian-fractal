@@ -1,5 +1,5 @@
 
-# Newton's fractal
+# Newton's fractal using ISPC
 
 An implementation of Newtowns fractal making use of the [ispc](https://github.com/ispc/ispc) compiler to compile a C dialect optimized for SIMD code generation. Using raylib for visualization.
 
@@ -28,19 +28,20 @@ ffmpeg
 If you have nix installed you can make use of my flake and enter a shell with all dependencies installed using  `nix develop`
 
 
-In both cases proceed to build the program like this
+In both cases once you have a shell containing all required dependencies proceed to build and run the program like this
 
 ```bash
 mkdir build
 cd build
 cmake ..
-make && /
+make && /newton-fractal
 ```
+All configuration is done using keybinds while the program is running.
 
 ## Visualization
 I used [raylib](https://github.com/raysan5/raylib) for managing window lifetime and drawing, this amazing C library abstracts over a lot of the verbose low level rendering api normally required, yet allows still allows for a lot of fine control. 
 
-Raylib is compiled with the SDL backend because of issues with hyprland (my window manager) using the GLFW backed, but both backends should work fine on pretty much any other configuration. 
+I compiled Raylib with the SDL backend because of minor graphical issues with the GLFW backend and hyprland (my window manager), but both backends should work fine on pretty much any other system. 
 
 
 ## Threading runtime
@@ -83,3 +84,11 @@ R - Toggle frame recording on/off
 ```
 
 
+## Notes 
+On my system the performance difference between Serial and SIMD was less than I expected, only about 1.5x, I put some time in improving this but concluded that with my current knowledge of SIMD best principles, this is it for now. 
+
+I thought about moving from an array of structs to a struct of arrays for better vectorized memory access patterns, but that would require significant changes propagating to basically all code of the program.  
+
+Another performance warning the ispc compiler kept giving me was related to the modulus operation I used to find the nearest root. I could have looked into using a more classical distance enumeration based calculation, however I found the modulus based trick really cool, so its staying in.
+
+The cpu I tested this on has 8 cores / 16 threads, so at first I picked 16 as the task count for multithreaded usage. However even while not entirely sure how the provided runtime worked I figured that at least doubling that could improve performance somewhat, to make use of an idle time occurring from uneven iteration depth between tasks. Having more tasks should therefore provide better overall cpu utilization at the cost of some overhead. Picking the optimal value would require setting up a benchmark.
