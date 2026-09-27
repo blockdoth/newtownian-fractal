@@ -68,6 +68,8 @@ task void fractal_ispc_task(
     uniform int max_iter, 
     uniform double tol, 
     uniform double zoom,
+    uniform float mouse_x,
+    uniform float mouse_y,      
     uniform int core_count
   ){
     
@@ -137,6 +139,8 @@ export void fractal_ispc(
   uniform int max_iter, 
   uniform double tol, 
   uniform double zoom,
+  uniform float mouse_x,
+  uniform float mouse_y,  
   uniform int task_count
 ){
   launch [task_count] fractal_ispc_task(
@@ -149,6 +153,8 @@ export void fractal_ispc(
     max_iter, 
     tol, 
     zoom,
+    mouse_x,
+    mouse_y,    
     task_count
   );
 }

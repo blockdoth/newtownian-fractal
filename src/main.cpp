@@ -60,6 +60,7 @@ int main() {
 
     int threaded_jobs_count = 64;
     
+    Vector2 mouse_pos = { 0.0f, 0.0f };
     vector<Color> pixels(SCREEN_WIDTH * SCREEN_HEIGHT);
     Point* grid = (Point*) std::aligned_alloc(32,  SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(Point));
     
@@ -154,20 +155,25 @@ int main() {
           }else {
             printf("Stoped recording frames\n");
           }
-        }    
+        } 
+
+        
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+          mouse_pos = GetMousePosition();
+        }
 
         if (changed) {
             auto compute_before = steady_clock::now();
             
             switch (mode) {
               case SERIAL:
-                fractal_cpp(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom);
+                fractal_cpp(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, mouse_pos.x, mouse_pos.y);
                 break;
               case SIMD:
-                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, 1);
+                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, mouse_pos.x, mouse_pos.y, 1);
                 break;
               case SIMD_THREADED:
-                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, threaded_jobs_count);
+                fractal_ispc(grid, SCREEN_WIDTH, SCREEN_HEIGHT, x_pos, y_pos, n, max_iter, tolerance,zoom, mouse_pos.x, mouse_pos.y, threaded_jobs_count);
                 break;
             }
 

@@ -1,4 +1,5 @@
 #include <complex>
+#include <raylib.h>
 #include "fractal_ispc.h"
 
 typedef std::complex<double> Complex;
@@ -12,5 +13,7 @@ void fractal_cpp(
   int n, 
   int max_iter, 
   double tol, 
-  double zoom
+  double zoom,
+  float mouse_x,
+  float mouse_y
 );
